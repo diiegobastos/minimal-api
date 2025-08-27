@@ -33,9 +33,10 @@ public class DbContexto : DbContext
             var stringConexao = _configuracaoAppSettings.GetConnectionString("MySql")?.ToString();
             if(!string.IsNullOrEmpty(stringConexao))
             {
+                var serverVersion = new MySqlServerVersion(new Version(8, 0, 0));
                 optionsBuilder.UseMySql(
                     stringConexao,
-                    ServerVersion.AutoDetect(stringConexao)
+                    serverVersion
                 );
             }
         }

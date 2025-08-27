@@ -1,4 +1,5 @@
 using MinimalApi;
+DotNetEnv.Env.Load();
 
 IHostBuilder CreateHostBuilder(string[] args){
   return Host.CreateDefaultBuilder(args)

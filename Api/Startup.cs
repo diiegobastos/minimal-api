@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using Pomelo.EntityFrameworkCore.MySql.Infrastructure;
 using MinimalApi;
 using MinimalApi.Dominio.Entidades;
 using MinimalApi.Dominio.Enuns;
@@ -21,7 +22,7 @@ public class Startup
     public Startup(IConfiguration configuration)
     {
         Configuration = configuration;
-        key = Configuration?.GetSection("Jwt")?.ToString() ?? "";
+        key = Configuration.GetValue<string>("Jwt") ?? string.Empty;
     }
 
     private string key = "";
@@ -73,10 +74,9 @@ public class Startup
         });
 
         services.AddDbContext<DbContexto>(options => {
-            options.UseMySql(
-                Configuration.GetConnectionString("MySql"),
-                ServerVersion.AutoDetect(Configuration.GetConnectionString("MySql"))
-            );
+            var conn = Configuration.GetConnectionString("MySql");
+            var serverVersion = new MySqlServerVersion(new Version(8, 0, 0));
+            options.UseMySql(conn, serverVersion);
         });
 
         services.AddCors(options =>
@@ -93,6 +93,19 @@ public class Startup
 
     public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
     {
+        using(var scope = app.ApplicationServices.CreateScope())
+        {
+            var logger = scope.ServiceProvider.GetRequiredService<ILogger<Startup>>();
+            try
+            {
+                var db = scope.ServiceProvider.GetRequiredService<DbContexto>();
+                db.Database.Migrate();
+            }
+            catch(Exception ex)
+            {
+                logger.LogError(ex, "Falha ao executar Database.Migrate(). Verifique o MySQL (host/porta, credenciais, serviço em execução).");
+            }
+        }
         app.UseSwagger();
         app.UseSwaggerUI();
 
@@ -165,7 +178,7 @@ public class Startup
             .RequireAuthorization(new AuthorizeAttribute { Roles = "Adm" })
             .WithTags("Administradores");
 
-            endpoints.MapGet("/Administradores/{id}", ([FromRoute] int id, IAdministradorServico administradorServico) => {
+            endpoints.MapGet("/administradores/{id}", ([FromRoute] int id, IAdministradorServico administradorServico) => {
                 var administrador = administradorServico.BuscaPorId(id);
                 if(administrador == null) return Results.NotFound();
                 return Results.Ok(new AdministradorModelView{
@@ -174,7 +187,6 @@ public class Startup
                         Perfil = administrador.Perfil
                 });
             })
-            .RequireAuthorization()
             .RequireAuthorization(new AuthorizeAttribute { Roles = "Adm" })
             .WithTags("Administradores");
 
@@ -246,7 +258,6 @@ public class Startup
 
                 return Results.Created($"/veiculo/{veiculo.Id}", veiculo);
             })
-            .RequireAuthorization()
             .RequireAuthorization(new AuthorizeAttribute { Roles = "Adm,Editor" })
             .WithTags("Veiculos");
 
@@ -254,14 +265,13 @@ public class Startup
                 var veiculos = veiculoServico.Todos(pagina);
 
                 return Results.Ok(veiculos);
-            }).RequireAuthorization().WithTags("Veiculos");
+            }).RequireAuthorization(new AuthorizeAttribute { Roles = "Adm,Editor" }).WithTags("Veiculos");
 
             endpoints.MapGet("/veiculos/{id}", ([FromRoute] int id, IVeiculoServico veiculoServico) => {
                 var veiculo = veiculoServico.BuscaPorId(id);
                 if(veiculo == null) return Results.NotFound();
                 return Results.Ok(veiculo);
             })
-            .RequireAuthorization()
             .RequireAuthorization(new AuthorizeAttribute { Roles = "Adm,Editor" })
             .WithTags("Veiculos");
 
@@ -281,7 +291,6 @@ public class Startup
 
                 return Results.Ok(veiculo);
             })
-            .RequireAuthorization()
             .RequireAuthorization(new AuthorizeAttribute { Roles = "Adm" })
             .WithTags("Veiculos");
 
